@@ -91,6 +91,7 @@ class FacebookService {
           },
           {
             headers: { Authorization: `Bearer ${accessToken}` }
+          }
         );
 
         facebookAdId = adResponse.data.id;

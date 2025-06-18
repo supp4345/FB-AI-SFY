@@ -3,13 +3,14 @@ const { Sequelize, DataTypes } = require('sequelize');
 // Environment variables
 const {
   DATABASE_URL,
+  POSTGRES_URL,
   NODE_ENV = 'production'
 } = process.env;
 
 // Database setup
-const sequelize = new Sequelize(DATABASE_URL || 'sqlite::memory:', {
+const sequelize = new Sequelize(DATABASE_URL || POSTGRES_URL || 'sqlite::memory:', {
   logging: NODE_ENV === 'development' ? console.log : false,
-  dialectOptions: NODE_ENV === 'production' ? {
+  dialectOptions: (DATABASE_URL || POSTGRES_URL) ? {
     ssl: {
       require: true,
       rejectUnauthorized: false

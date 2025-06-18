@@ -25,6 +25,7 @@ try {
   ({ initDatabase } = require('./config/database'));
   ({ initAI } = require('./services/aiService'));
   ({ startOptimizationScheduler } = require('./services/optimizationService'));
+  console.log('✅ All modules loaded successfully');
 } catch (error) {
   console.error('Error loading modules:', error.message);
   // Create fallback controllers
@@ -75,14 +76,14 @@ const router = new Router();
 // Environment variables
 const {
   NODE_ENV = 'production',
-  PORT = 3000,
+  PORT = process.env.PORT || 12000,
   SESSION_SECRET = 'your-secret-key',
-  HOST = 'https://work-1-eujntbtsicklhitb.prod-runtime.all-hands.dev'
+  HOST = process.env.HOST || 'https://work-1-nyyacaaazrijxtar.prod-runtime.all-hands.dev'
 } = process.env;
 
 // Initialize database and AI
-initDatabase();
-initAI();
+// initDatabase(); // Temporarily disabled for testing
+// initAI(); // Temporarily disabled for testing
 
 // Session configuration
 app.keys = [SESSION_SECRET];
@@ -90,8 +91,8 @@ app.use(session({
   key: 'shopify-fb-ads:sess',
   maxAge: 86400000 * 7, // 7 days
   httpOnly: true,
-  secure: NODE_ENV === 'production',
-  sameSite: 'none', // Required for Shopify iframe
+  secure: false, // Disable secure cookies for proxy setup
+  sameSite: 'lax', // Change from 'none' to 'lax' for testing
   overwrite: true,
   signed: true
 }, app));
