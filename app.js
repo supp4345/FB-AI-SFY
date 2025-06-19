@@ -10,11 +10,21 @@ const serve = require('koa-static');
 const cors = require('@koa/cors');
 const path = require('path');
 const cron = require('node-cron');
+const {
+  cacheControl,
+  resourceHints,
+  securityHeaders,
+  responseTime,
+  etag,
+  preloadCritical,
+  contentOptimization,
+  webVitalsMonitoring
+} = require('./middleware/performance');
 require('dotenv').config();
 
 // Import controllers and services with error handling
 let authController, dashboardController, campaignController, aiController, analyticsController;
-let initDatabase, initAI, startOptimizationScheduler;
+let initDatabase, initAI, startOptimizationScheduler, User;
 
 try {
   authController = require('./controllers/authController');
@@ -22,7 +32,7 @@ try {
   campaignController = require('./controllers/campaignController');
   aiController = require('./controllers/aiController');
   analyticsController = require('./controllers/analyticsController');
-  ({ initDatabase } = require('./config/database'));
+  ({ initDatabase, User } = require('./config/database'));
   ({ initAI } = require('./services/aiService'));
   ({ startOptimizationScheduler } = require('./services/optimizationService'));
   console.log('✅ All modules loaded successfully');
@@ -97,6 +107,16 @@ app.use(session({
   signed: true
 }, app));
 
+// Performance middleware (order matters for optimal performance)
+app.use(webVitalsMonitoring);
+app.use(responseTime);
+app.use(cacheControl(3600)); // 1 hour default cache
+app.use(resourceHints);
+app.use(preloadCritical);
+app.use(securityHeaders);
+app.use(etag);
+app.use(contentOptimization);
+
 // Middleware setup
 app.use(cors({
   origin: (ctx) => {
@@ -155,12 +175,65 @@ app.use(async (ctx, next) => {
 
 // Routes
 
-// Landing page
+// Landing page (for non-Shopify visitors)
 router.get('/', async (ctx) => {
+  const shop = ctx.query.shop;
+  
+  // If shop parameter is present, redirect to install
+  if (shop) {
+    ctx.redirect(`/auth/shopify?shop=${encodeURIComponent(shop)}`);
+    return;
+  }
+  
   await ctx.render('landing', {
     title: 'AI Facebook Ads Pro - Shopify App',
     host: HOST
   });
+});
+
+// Main embedded app route
+router.get('/app', async (ctx) => {
+  const shop = ctx.query.shop;
+  const host = ctx.query.host;
+  
+  if (!shop) {
+    ctx.redirect('/');
+    return;
+  }
+  
+  try {
+    // Get user from database
+    const user = await User.findOne({ where: { shopDomain: shop } });
+    
+    if (!user) {
+      // User not found, redirect to auth
+      ctx.redirect(`/auth/shopify?shop=${encodeURIComponent(shop)}`);
+      return;
+    }
+    
+    await ctx.render('app', {
+      title: 'AI Facebook Ads Pro - Dashboard',
+      user: {
+        id: user.id,
+        shopDomain: user.shopDomain,
+        shopName: user.shopName || shop,
+        email: user.email,
+        facebookAccessToken: user.facebookAccessToken,
+        hasCompletedOnboarding: user.hasCompletedOnboarding || false
+      },
+      shop: {
+        name: user.shopName || shop,
+        domain: shop,
+        currency: user.currency || 'USD'
+      },
+      host: host,
+      process: { env: { SHOPIFY_API_KEY } }
+    });
+  } catch (error) {
+    console.error('Error loading app:', error);
+    ctx.status = 500;
+    ctx.body = { error: 'Failed to load app' };
+  }
 });
 
 // Demo route (bypasses authentication for showcase)
@@ -212,6 +285,37 @@ router.post('/api/ai/generate-creatives', aiController.generateCreatives);
 router.post('/api/ai/audience-suggestions', aiController.audienceSuggestions);
 router.post('/api/ai/budget-recommendations', aiController.budgetRecommendations);
 
+// Dashboard overview
+router.get('/api/dashboard/overview', async (ctx) => {
+  try {
+    if (!ctx.session.userId) {
+      ctx.status = 401;
+      ctx.body = { success: false, error: 'Authentication required' };
+      return;
+    }
+
+    // Mock data for now - replace with real analytics later
+    const overview = {
+      metrics: {
+        totalRevenue: 12450,
+        totalRoas: 4.2,
+        activeCampaigns: 3,
+        totalConversions: 156
+      },
+      recentActivity: [
+        { type: 'campaign_created', message: 'New campaign "Summer Sale" created', time: '2 hours ago' },
+        { type: 'optimization', message: 'Campaign "Holiday Promo" optimized by AI', time: '4 hours ago' },
+        { type: 'conversion', message: '12 new conversions from "Product Launch"', time: '6 hours ago' }
+      ]
+    };
+
+    ctx.body = { success: true, ...overview };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: error.message };
+  }
+});
+
 // Analytics and reporting
 router.get('/api/analytics/overview', analyticsController.overview);
 router.get('/api/analytics/campaigns/:id', analyticsController.campaignAnalytics);
@@ -221,9 +325,16 @@ router.post('/api/analytics/export', analyticsController.exportData);
 
 // Product integration
 router.get('/api/products', async (ctx) => {
-  const { getShopifyProducts } = require('./services/shopifyService');
   try {
-    const products = await getShopifyProducts(ctx.session.userId);
+    const productSyncService = require('./services/productSyncService');
+    const user = await User.findByPk(ctx.session.userId);
+    if (!user) {
+      ctx.status = 401;
+      ctx.body = { success: false, error: 'User not found' };
+      return;
+    }
+    
+    const products = await productSyncService.getShopifyProducts(user);
     ctx.body = { success: true, products };
   } catch (error) {
     ctx.status = 500;
@@ -231,8 +342,57 @@ router.get('/api/products', async (ctx) => {
   }
 });
 
+// Product sync to Facebook
+router.post('/api/products/sync', async (ctx) => {
+  try {
+    const productSyncService = require('./services/productSyncService');
+    
+    if (!ctx.session.userId) {
+      ctx.status = 401;
+      ctx.body = { success: false, error: 'Authentication required' };
+      return;
+    }
+    
+    const result = await productSyncService.syncProductsToFacebook(ctx.session.userId);
+    ctx.body = result;
+  } catch (error) {
+    console.error('Product sync error:', error);
+    ctx.status = 500;
+    ctx.body = { success: false, error: error.message };
+  }
+});
+
+// Get sync status
+router.get('/api/products/sync-status', async (ctx) => {
+  try {
+    const productSyncService = require('./services/productSyncService');
+    
+    if (!ctx.session.userId) {
+      ctx.status = 401;
+      ctx.body = { success: false, error: 'Authentication required' };
+      return;
+    }
+    
+    const status = await productSyncService.getSyncStatus(ctx.session.userId);
+    ctx.body = { success: true, status };
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = { success: false, error: error.message };
+  }
+});
+
 // Webhook endpoints
+router.post('/webhooks/shopify/app/uninstalled', async (ctx) => {
+  const { handleAppUninstall } = require('./services/webhookService');
+  await handleAppUninstall(ctx);
+});
+
 router.post('/webhooks/shopify/orders/create', async (ctx) => {
+  const { handleOrderWebhook } = require('./services/webhookService');
+  await handleOrderWebhook(ctx);
+});
+
+router.post('/webhooks/shopify/orders/updated', async (ctx) => {
   const { handleOrderWebhook } = require('./services/webhookService');
   await handleOrderWebhook(ctx);
 });

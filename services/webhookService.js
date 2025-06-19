@@ -2,6 +2,36 @@ const crypto = require('crypto');
 const { User, Campaign, Performance } = require('../config/database');
 
 class WebhookService {
+  // Handle app uninstall webhook
+  async handleAppUninstall(ctx) {
+    try {
+      // Verify webhook authenticity
+      if (!this.verifyShopifyWebhook(ctx)) {
+        ctx.status = 401;
+        ctx.body = { error: 'Unauthorized' };
+        return;
+      }
+
+      const shopDomain = ctx.get('X-Shopify-Shop-Domain');
+      const user = await User.findOne({ where: { shopDomain } });
+      
+      if (user) {
+        // Deactivate user and clean up data
+        user.isActive = false;
+        user.shopifyAccessToken = null;
+        await user.save();
+        console.log(`App uninstalled for shop: ${shopDomain}`);
+      }
+      
+      ctx.status = 200;
+      ctx.body = { success: true };
+    } catch (error) {
+      console.error('App uninstall webhook error:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Internal server error' };
+    }
+  }
+
   // Handle Shopify order webhooks
   async handleOrderWebhook(ctx) {
     try {
@@ -26,6 +56,11 @@ class WebhookService {
 
       // Process order for campaign attribution
       await this.processOrderAttribution(user, order);
+      
+      // Send conversion to Facebook if configured
+      if (user.facebookAccessToken) {
+        await this.sendFacebookConversion(user, order);
+      }
       
       ctx.status = 200;
       ctx.body = { success: true };
@@ -176,10 +211,70 @@ class WebhookService {
     console.log('Ad set change event:', value);
   }
 
+  // Send conversion event to Facebook Conversions API
+  async sendFacebookConversion(user, order) {
+    try {
+      const axios = require('axios');
+      
+      // Prepare conversion data
+      const eventData = {
+        data: [{
+          event_name: 'Purchase',
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: 'website',
+          event_source_url: `https://${user.shopDomain}`,
+          user_data: {
+            em: order.email ? crypto.createHash('sha256').update(order.email.toLowerCase()).digest('hex') : null,
+            fn: order.billing_address?.first_name ? crypto.createHash('sha256').update(order.billing_address.first_name.toLowerCase()).digest('hex') : null,
+            ln: order.billing_address?.last_name ? crypto.createHash('sha256').update(order.billing_address.last_name.toLowerCase()).digest('hex') : null,
+            ph: order.billing_address?.phone ? crypto.createHash('sha256').update(order.billing_address.phone.replace(/\D/g, '')).digest('hex') : null
+          },
+          custom_data: {
+            currency: order.currency,
+            value: parseFloat(order.total_price),
+            order_id: order.id.toString(),
+            content_ids: order.line_items.map(item => item.product_id.toString()),
+            content_type: 'product',
+            num_items: order.line_items.reduce((sum, item) => sum + item.quantity, 0)
+          }
+        }]
+      };
+
+      // Remove null values
+      Object.keys(eventData.data[0].user_data).forEach(key => {
+        if (eventData.data[0].user_data[key] === null) {
+          delete eventData.data[0].user_data[key];
+        }
+      });
+
+      // Send to Facebook Conversions API (using pixel ID from user settings)
+      if (user.facebookPixelId) {
+        const response = await axios.post(
+          `https://graph.facebook.com/v18.0/${user.facebookPixelId}/events`,
+          eventData,
+          {
+            headers: {
+              'Authorization': `Bearer ${user.facebookAccessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        console.log('Facebook conversion sent successfully:', response.data);
+      }
+    } catch (error) {
+      console.error('Error sending Facebook conversion:', error);
+    }
+  }
+
   // Setup webhooks for a new user
   async setupWebhooks(user) {
     try {
       const webhooks = [
+        {
+          topic: 'app/uninstalled',
+          address: `${process.env.HOST}/webhooks/shopify/app/uninstalled`
+        },
         {
           topic: 'orders/create',
           address: `${process.env.HOST}/webhooks/shopify/orders/create`

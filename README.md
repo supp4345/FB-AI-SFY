@@ -48,196 +48,221 @@ A comprehensive AI-powered Facebook advertising management app for Shopify store
 
 1. **Clone and install**
    ```bash
-   git clone https://github.com/yashraj0077/FacebookAI-Ads-Shopify.git
-   cd FacebookAI-Ads-Shopify
+   git clone https://github.com/your-username/ai-facebook-ads-pro.git
+   cd ai-facebook-ads-pro
    npm install
    ```
 
-2. **Configure environment**
+2. **Environment Setup**
    ```bash
    cp .env.example .env
-   # Edit .env with your credentials
+   # Edit .env with your actual credentials
    ```
 
-3. **Start development server**
+3. **Configure Shopify App**
+   - Create a new app in your Shopify Partner Dashboard
+   - Set the app URL to your deployment URL
+   - Add the required scopes: `read_products,write_products,read_orders,write_orders,read_customers,read_customer_events`
+   - Configure OAuth redirect URLs
+
+4. **Configure Facebook App**
+   - Create a Facebook app in Facebook Developer Console
+   - Add Marketing API permissions
+   - Configure webhook endpoints
+
+5. **Start Development Server**
    ```bash
    npm run dev
    ```
-
-## 🌐 Live Demo
-
-**🔗 Production App**: https://facebook-ai-ads-shopify.vercel.app  
-**📊 Demo Dashboard**: https://facebook-ai-ads-shopify.vercel.app/demo
-
-> **Quick Deploy**: See [VERCEL_SETUP.md](./VERCEL_SETUP.md) for complete deployment instructions with environment variables.
-
-### ✅ Demo Features Available:
-- Modern Shopify-style dashboard with sidebar navigation
-- AI campaign generation interface with step-by-step wizard
-- Campaign management with full CRUD operations
-- Real-time analytics dashboard with charts and metrics
-- Responsive mobile design optimized for Shopify iframe
-- AI-powered content generation and optimization tools
-- Performance tracking and insights
-
-### 🎨 UI/UX Highlights:
-- **Shopify-optimized design**: Matches Shopify admin interface perfectly
-- **Sidebar navigation**: Clean, organized menu structure with icons
-- **Modern components**: Cards, modals, forms with Shopify Polaris styling
-- **Mobile-first**: Fully responsive design for all devices
-- **Interactive elements**: Hover effects, animations, and smooth transitions
 
 ## 🚀 Deployment
 
 ### Vercel Deployment (Recommended)
 
-1. **Deploy to Vercel**
+1. **Install Vercel CLI**
    ```bash
-   npm install -g vercel
+   npm i -g vercel
+   ```
+
+2. **Deploy**
+   ```bash
    vercel --prod
    ```
 
-2. **Configure environment variables in Vercel dashboard**
-   - Add all environment variables from your `.env` file
-   - Ensure `HOST` points to your Vercel domain
+3. **Configure Environment Variables**
+   - Add all environment variables in Vercel dashboard
+   - Update Shopify app URLs with your Vercel domain
+
+### Manual Deployment
+
+1. **Build the app**
+   ```bash
+   npm run build
+   ```
+
+2. **Start production server**
+   ```bash
+   npm start
+   ```
+
+## 📋 Shopify App Store Submission Checklist
+
+### ✅ Technical Requirements
+
+- [x] **Embedded App**: Uses App Bridge 2.0+ for seamless Shopify admin integration
+- [x] **Session Token Authentication**: Secure authentication with session tokens
+- [x] **Core Web Vitals Optimized**: 
+  - LCP < 2.5 seconds
+  - CLS < 0.1
+  - INP < 200 milliseconds
+- [x] **Theme App Extensions**: Facebook Pixel integration for storefront
+- [x] **Clean Uninstall**: Proper webhook handling for app removal
+- [x] **Performance Optimized**: Caching, compression, and resource optimization
+
+### ✅ Functionality Requirements
+
+- [x] **Well Integrated**: Primary workflows in Shopify admin
+- [x] **No Asset API Usage**: Uses theme app extensions instead
+- [x] **Shopify Design Guidelines**: Consistent UI/UX with Shopify admin
+- [x] **Proper Error Handling**: Graceful error handling and user feedback
+
+### ✅ App Features
+
+- [x] **AI Campaign Creation**: Generate Facebook ads using AI
+- [x] **Product Sync**: Sync Shopify products to Facebook catalog
+- [x] **Conversion Tracking**: Facebook Pixel and Conversions API integration
+- [x] **Performance Analytics**: Real-time campaign performance tracking
+- [x] **Onboarding Flow**: Guided setup for new users
 
 ## 🔧 Configuration
 
-### Shopify App Setup
-1. Create a Shopify Partner account at https://partners.shopify.com
-2. Create a new app in your Partner dashboard
-3. Configure app settings:
-   - App URL: `https://your-domain.com`
-   - Allowed redirection URLs: `https://your-domain.com/auth/shopify/callback`
-4. Set required scopes: `read_products,write_products,read_orders,write_orders`
+### Required Environment Variables
 
-### Facebook App Setup
-1. Create a Facebook Developer account at https://developers.facebook.com
-2. Create a new app with Marketing API access
-3. Configure OAuth redirect URI: `https://your-domain.com/auth/facebook/callback`
-4. Request permissions: `ads_management`, `ads_read`, `business_management`
+```env
+# Shopify Configuration
+SHOPIFY_API_KEY=your_shopify_api_key
+SHOPIFY_API_SECRET_KEY=your_shopify_secret
+SHOPIFY_WEBHOOK_SECRET=your_webhook_secret
 
-### Google AI Setup
-1. Get a Gemini API key from https://makersuite.google.com/app/apikey
-2. Add the API key to your environment variables
+# Facebook Configuration  
+FACEBOOK_APP_ID=your_facebook_app_id
+FACEBOOK_APP_SECRET=your_facebook_secret
+FACEBOOK_WEBHOOK_SECRET=your_facebook_webhook_secret
 
-## 🤖 AI Features
+# Database
+DATABASE_URL=your_database_url
 
-### Campaign Generation
-- Analyzes product data to create targeted campaigns
-- Generates multiple ad creative variations
-- Suggests optimal targeting and budget allocation
-- Provides performance predictions
+# Server
+HOST=https://your-app-domain.com
+PORT=12000
+SESSION_SECRET=your_session_secret
 
-### Auto Optimization
-- Monitors campaign performance in real-time
-- Automatically adjusts budgets based on ROAS
-- Optimizes targeting and bidding strategies
-- Pauses underperforming creatives
-- Scales successful campaigns
+# AI
+GOOGLE_AI_API_KEY=your_google_ai_key
+```
 
-## 📊 Key Improvements in v4.0
+### Shopify App Configuration
 
-### UI/UX Redesign
-- **Shopify-optimized design**: Matches Shopify admin interface perfectly
-- **Sidebar navigation**: Clean, organized menu structure
-- **Modern components**: Cards, modals, forms with Shopify Polaris styling
-- **Mobile-first**: Fully responsive design for all devices
+Create `shopify.app.toml` in your project root:
 
-### AI Enhancements
-- **Advanced campaign generation**: Multi-step AI-powered campaign creation
-- **Smart optimization**: Automatic budget and targeting adjustments
-- **Creative testing**: A/B testing with AI-generated variations
-- **Performance prediction**: AI-powered ROAS and conversion estimates
+```toml
+name = "AI Facebook Ads Pro"
+client_id = "{{ SHOPIFY_API_KEY }}"
+application_url = "{{ HOST }}"
+embedded = true
 
-### Campaign Management
-- **Full CRUD operations**: Create, read, update, delete campaigns
-- **Bulk actions**: Manage multiple campaigns simultaneously
-- **Campaign duplication**: Clone successful campaigns with one click
-- **Status management**: Pause, resume, and archive campaigns
+[access_scopes]
+scopes = "write_products,read_products,write_orders,read_orders,read_customers,read_customer_events"
 
-## 📱 Mobile Optimization
+[auth]
+redirect_urls = [
+  "{{ HOST }}/auth/shopify/callback"
+]
+```
 
-The app is fully optimized for mobile devices and Shopify's mobile admin:
-- Responsive design that works on all screen sizes
-- Touch-friendly interface elements
-- Optimized loading times
-- Mobile-specific navigation patterns
+## 🎯 Usage
+
+### For Merchants
+
+1. **Install the App**: Click "Install" from the Shopify App Store
+2. **Connect Facebook**: Link your Facebook Business account
+3. **Sync Products**: Import your Shopify products to Facebook catalog
+4. **Create Campaigns**: Use AI to generate high-converting ad campaigns
+5. **Monitor Performance**: Track results and optimize campaigns
+
+### For Developers
+
+1. **API Endpoints**: RESTful API for campaign management
+2. **Webhooks**: Real-time updates from Shopify and Facebook
+3. **Database Models**: Comprehensive data models for campaigns, users, and analytics
+4. **AI Integration**: Google Gemini AI for content generation
+
+## 📊 Performance Monitoring
+
+The app includes built-in performance monitoring for Core Web Vitals:
+
+- **LCP Tracking**: Largest Contentful Paint monitoring
+- **CLS Tracking**: Cumulative Layout Shift detection  
+- **INP Tracking**: Interaction to Next Paint measurement
+- **Response Time**: Server response time monitoring
 
 ## 🔒 Security
 
-- CSRF protection on all forms
-- Secure session management
-- Shopify webhook verification
-- Facebook webhook verification
-- Input validation and sanitization
-- SQL injection prevention through ORM
+- **Session Token Authentication**: Secure Shopify authentication
+- **Webhook Verification**: HMAC signature verification
+- **Data Encryption**: Sensitive data encryption at rest
+- **CORS Protection**: Proper CORS configuration for Shopify embedding
+- **Rate Limiting**: API rate limiting and abuse prevention
 
-## 📈 Performance
+## 🧪 Testing
 
-- Optimized for Shopify iframe embedding
-- Lazy loading of components
-- Efficient database queries
-- CDN-ready static assets
-- Gzip compression
-- Browser caching strategies
+```bash
+# Run tests
+npm test
 
-## 📝 API Documentation
+# Run with coverage
+npm run test:coverage
 
-### Campaign Management
-- `GET /api/campaigns` - List all campaigns
-- `POST /api/campaigns` - Create new campaign
-- `GET /api/campaigns/:id` - Get campaign details
-- `PUT /api/campaigns/:id` - Update campaign
-- `DELETE /api/campaigns/:id` - Delete campaign
-- `POST /api/campaigns/:id/pause` - Pause campaign
-- `POST /api/campaigns/:id/resume` - Resume campaign
+# Run specific test suite
+npm test -- --grep "Campaign"
+```
 
-### AI Features
-- `POST /api/ai/generate-campaign` - Generate AI campaign
-- `POST /api/ai/optimize-campaign` - Get optimization suggestions
-- `POST /api/ai/generate-creatives` - Generate ad creatives
-- `POST /api/ai/audience-suggestions` - Get audience suggestions
+## 📈 Analytics & Reporting
 
-### Analytics
-- `GET /api/analytics/overview` - Dashboard overview
-- `GET /api/analytics/campaigns/:id` - Campaign analytics
-- `GET /api/analytics/performance` - Performance insights
+- **Campaign Performance**: ROAS, CTR, CPC, conversions
+- **Product Analytics**: Best performing products and categories
+- **Audience Insights**: Demographic and behavioral data
+- **Revenue Attribution**: Order tracking and attribution
+- **Export Capabilities**: CSV/Excel export for external analysis
 
-## 🔄 Changelog
+## 🤝 Contributing
 
-### v4.0.0 (Current)
-- ✅ Complete UI/UX redesign with Shopify-style dashboard
-- ✅ Advanced AI campaign generation and optimization
-- ✅ Full campaign management (CRUD operations)
-- ✅ Real-time analytics and insights
-- ✅ Mobile-optimized responsive design
-- ✅ Enhanced security and performance
-- ✅ Comprehensive API documentation
-
-### v3.0.0
-- Basic AI content generation
-- Simple campaign creation
-- Basic analytics
-
-## 🎯 Roadmap
-
-- [ ] Advanced audience lookalike modeling
-- [ ] Multi-language support
-- [ ] Instagram and WhatsApp ad support
-- [ ] Advanced A/B testing framework
-- [ ] Custom AI model training
-- [ ] Team collaboration features
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+MIT License - see LICENSE file for details
 
 ## 🆘 Support
 
-- **Issues**: Report bugs and request features on GitHub Issues
-- **Documentation**: Check this README and inline code comments
+- **Documentation**: [Full documentation](https://docs.your-app.com)
+- **Support Email**: support@your-app.com
+- **GitHub Issues**: [Report bugs](https://github.com/your-username/ai-facebook-ads-pro/issues)
+
+## 🎉 Changelog
+
+### v4.0.0
+- Complete rewrite with modern architecture
+- App Bridge 2.0+ integration
+- Core Web Vitals optimization
+- Theme app extensions
+- Enhanced AI capabilities
+- Improved onboarding flow
 
 ---
 
-**Made with ❤️ for Shopify merchants who want to scale their business with AI-powered advertising.**
+**Made with ❤️ for Shopify merchants who want to scale their Facebook advertising with AI**

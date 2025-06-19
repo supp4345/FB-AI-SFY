@@ -31,7 +31,16 @@ const User = sequelize.define('User', {
   facebookAccessToken: DataTypes.TEXT,
   facebookUserId: DataTypes.STRING,
   facebookAdAccountId: DataTypes.STRING,
+  facebookCatalogId: DataTypes.STRING,
   email: DataTypes.STRING,
+  shopName: DataTypes.STRING,
+  currency: DataTypes.STRING,
+  timezone: DataTypes.STRING,
+  hasCompletedOnboarding: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  lastProductSyncAt: DataTypes.DATE,
   settings: {
     type: DataTypes.JSON,
     defaultValue: {

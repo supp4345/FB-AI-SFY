@@ -1,5 +1,6 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const { shopify, createRestClient } = require('../config/shopify');
 const { User } = require('../config/database');
 
 const {
@@ -15,18 +16,12 @@ class AuthController {
   async shopifyAuth(ctx) {
     try {
       const shop = ctx.query.shop;
+      const embedded = ctx.query.embedded !== '0';
+      
       if (!shop) {
         console.log('Missing shop parameter in OAuth request');
         ctx.status = 400;
-        ctx.body = `
-          <html>
-            <body>
-              <h1>Error: Missing Shop Parameter</h1>
-              <p>Please provide your Shopify store domain.</p>
-              <a href="/">Go back to homepage</a>
-            </body>
-          </html>
-        `;
+        ctx.body = { error: 'Missing shop parameter' };
         return;
       }
 
@@ -35,114 +30,101 @@ class AuthController {
       if (!cleanShop.includes('.myshopify.com') || !/^[a-zA-Z0-9\-]+\.myshopify\.com$/.test(cleanShop)) {
         console.log(`Invalid shop domain: ${shop}`);
         ctx.status = 400;
-        ctx.body = `
-          <html>
-            <body>
-              <h1>Error: Invalid Shop Domain</h1>
-              <p>Please use a valid .myshopify.com domain (e.g., your-store.myshopify.com)</p>
-              <a href="/">Go back to homepage</a>
-            </body>
-          </html>
-        `;
+        ctx.body = { error: 'Invalid shop domain' };
         return;
       }
 
       console.log(`Starting OAuth for shop: ${cleanShop}`);
 
-      const nonce = crypto.randomBytes(16).toString('hex');
-      ctx.session.nonce = nonce;
-      ctx.session.shop = cleanShop;
+      // Use Shopify API library for OAuth
+      const authRoute = await shopify.auth.begin({
+        shop: cleanShop,
+        callbackPath: '/auth/shopify/callback',
+        isOnline: false,
+        rawRequest: ctx.req,
+        rawResponse: ctx.res
+      });
 
-      const redirectUri = `${HOST}/auth/shopify/callback`;
-      const scopes = 'read_products,write_products,read_orders,write_orders,read_customers,read_customer_events';
-
-      const authUrl = `https://${cleanShop}/admin/oauth/authorize?` +
-        `client_id=${SHOPIFY_API_KEY}&` +
-        `scope=${encodeURIComponent(scopes)}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `state=${nonce}`;
-
-      console.log(`Redirecting to Shopify OAuth: ${authUrl}`);
-      ctx.redirect(authUrl);
+      console.log(`Redirecting to Shopify OAuth: ${authRoute}`);
+      ctx.redirect(authRoute);
     } catch (error) {
       console.error('Error in shopifyAuth:', error);
       ctx.status = 500;
-      ctx.body = `
-        <html>
-          <body>
-            <h1>Error: Authentication Failed</h1>
-            <p>There was an error starting the authentication process.</p>
-            <a href="/">Go back to homepage</a>
-          </body>
-        </html>
-      `;
+      ctx.body = { error: 'Authentication failed' };
     }
   }
 
   // Shopify OAuth callback
   async shopifyCallback(ctx) {
-    const { shop, code, state } = ctx.query;
-
-    if (state !== ctx.session.nonce) {
-      ctx.status = 403;
-      ctx.body = { error: 'Invalid nonce' };
-      return;
-    }
-
-    if (!code) {
-      ctx.status = 400;
-      ctx.body = { error: 'Authorization code not provided' };
-      return;
-    }
-
     try {
-      // Exchange code for access token
-      const accessToken = await this.exchangeCodeForToken(shop, code);
+      // Complete OAuth flow using Shopify API
+      const callbackResponse = await shopify.auth.callback({
+        rawRequest: ctx.req,
+        rawResponse: ctx.res
+      });
 
-      // Get shop information
-      const shopInfo = await this.getShopInfo(shop, accessToken);
+      const { session } = callbackResponse;
+      
+      if (!session) {
+        ctx.status = 400;
+        ctx.body = { error: 'Failed to create session' };
+        return;
+      }
+
+      // Get shop information using REST client
+      const client = createRestClient(session);
+      const shopResponse = await client.get({ path: 'shop' });
+      const shopInfo = shopResponse.body.shop;
 
       // Store or update user in database
       const [user, created] = await User.findOrCreate({
-        where: { shopDomain: shop },
+        where: { shopDomain: session.shop },
         defaults: {
-          shopifyAccessToken: accessToken,
+          shopifyAccessToken: session.accessToken,
           email: shopInfo.email,
+          shopName: shopInfo.name,
+          currency: shopInfo.currency,
+          timezone: shopInfo.iana_timezone,
           trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+          hasCompletedOnboarding: false,
           settings: {
             autoOptimization: true,
             budgetAlerts: true,
             performanceAlerts: true,
             weeklyReports: true,
             currency: shopInfo.currency || 'USD',
-            timezone: shopInfo.timezone || 'UTC'
+            timezone: shopInfo.iana_timezone || 'UTC'
           }
         }
       });
 
       if (!created) {
         // Update existing user
-        user.shopifyAccessToken = accessToken;
+        user.shopifyAccessToken = session.accessToken;
         user.email = shopInfo.email;
+        user.shopName = shopInfo.name;
+        user.currency = shopInfo.currency;
+        user.timezone = shopInfo.iana_timezone;
         user.lastLoginAt = new Date();
         await user.save();
       }
 
-      // Set session
-      ctx.session.userId = user.id;
-      ctx.session.shop = shop;
-      ctx.session.authenticated = true;
+      // Store session in Shopify's session storage
+      await shopify.config.sessionStorage.storeSession(session);
 
-      // Redirect to dashboard
-      ctx.redirect('/dashboard');
+      // Set session for our app
+      ctx.session.userId = user.id;
+      ctx.session.shop = session.shop;
+      ctx.session.authenticated = true;
+      ctx.session.sessionId = session.id;
+
+      // Redirect to embedded app
+      const redirectUrl = `${HOST}/app?shop=${session.shop}&host=${Buffer.from(`${session.shop}/admin`).toString('base64')}`;
+      ctx.redirect(redirectUrl);
     } catch (error) {
-      console.error('Shopify auth error:', error);
+      console.error('Shopify auth callback error:', error);
       ctx.status = 500;
-      await ctx.render('error', {
-        title: 'Authentication Error',
-        error: 'Failed to authenticate with Shopify. Please try again.',
-        status: 500
-      });
+      ctx.body = { error: 'Authentication failed' };
     }
   }
 
