@@ -175,7 +175,7 @@ app.use(async (ctx, next) => {
 
 // Routes
 
-// Landing page (for non-Shopify visitors)
+// Root route - redirect to Shopify authentication
 router.get('/', async (ctx) => {
   const shop = ctx.query.shop;
   
@@ -185,10 +185,8 @@ router.get('/', async (ctx) => {
     return;
   }
   
-  await ctx.render('landing', {
-    title: 'AI Facebook Ads Pro - Shopify App',
-    host: HOST
-  });
+  // No shop parameter - this means direct access, redirect to Shopify app installation
+  ctx.redirect('https://apps.shopify.com/your-app-handle');
 });
 
 // Main embedded app route
@@ -197,11 +195,19 @@ router.get('/app', async (ctx) => {
   const host = ctx.query.host;
   
   if (!shop) {
-    ctx.redirect('/');
+    ctx.status = 400;
+    ctx.body = { error: 'Shop parameter is required. Please install the app from Shopify App Store.' };
     return;
   }
   
   try {
+    // Ensure User model is available
+    if (!User) {
+      console.error('User model not available');
+      ctx.redirect(`/auth/shopify?shop=${encodeURIComponent(shop)}`);
+      return;
+    }
+    
     // Get user from database
     const user = await User.findOne({ where: { shopDomain: shop } });
     
