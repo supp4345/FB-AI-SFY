@@ -16,7 +16,17 @@ class AuthController {
   async shopifyAuth(ctx) {
     try {
       const shop = ctx.query.shop;
+      const host = ctx.query.host;
       const embedded = ctx.query.embedded !== '0';
+      
+      console.log('OAuth initiation with params:', {
+        shop,
+        host,
+        embedded,
+        userAgent: ctx.get('User-Agent'),
+        referer: ctx.get('Referer'),
+        allParams: ctx.query
+      });
       
       if (!shop) {
         console.log('Missing shop parameter in OAuth request');
@@ -45,12 +55,14 @@ class AuthController {
         rawResponse: ctx.res
       });
 
-      console.log(`Redirecting to Shopify OAuth: ${authRoute}`);
+      console.log(`Generated OAuth URL: ${authRoute}`);
+      console.log(`Redirecting to Shopify OAuth...`);
       ctx.redirect(authRoute);
     } catch (error) {
       console.error('Error in shopifyAuth:', error);
+      console.error('Error stack:', error.stack);
       ctx.status = 500;
-      ctx.body = { error: 'Authentication failed' };
+      ctx.body = { error: 'Authentication failed', details: error.message };
     }
   }
 

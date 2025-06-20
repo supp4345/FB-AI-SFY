@@ -180,6 +180,18 @@ router.get('/', async (ctx) => {
   const shop = ctx.query.shop;
   const host = ctx.query.host;
   const embedded = ctx.query.embedded;
+  const timestamp = ctx.query.timestamp;
+  const hmac = ctx.query.hmac;
+  
+  console.log('Root route accessed with params:', {
+    shop,
+    host,
+    embedded,
+    timestamp,
+    hmac,
+    userAgent: ctx.get('User-Agent'),
+    referer: ctx.get('Referer')
+  });
   
   // If shop parameter is present, this is a Shopify installation request
   if (shop) {
@@ -188,6 +200,7 @@ router.get('/', async (ctx) => {
     // Validate shop domain
     const cleanShop = shop.toLowerCase().trim();
     if (!cleanShop.includes('.myshopify.com') || !/^[a-zA-Z0-9\-]+\.myshopify\.com$/.test(cleanShop)) {
+      console.log(`Invalid shop domain: ${shop}`);
       await ctx.render('install', { 
         title: 'Install AI Facebook Ads Pro',
         error: 'Invalid shop domain. Please enter a valid Shopify store URL.',
@@ -196,12 +209,23 @@ router.get('/', async (ctx) => {
       return;
     }
     
+    // Check if this is coming from Shopify Partner Dashboard
+    const userAgent = ctx.get('User-Agent') || '';
+    const referer = ctx.get('Referer') || '';
+    
+    if (userAgent.includes('Shopify') || referer.includes('shopify.com') || referer.includes('partners.shopify.com')) {
+      console.log('Request from Shopify Partner Dashboard detected');
+    }
+    
     // Redirect to Shopify OAuth
-    ctx.redirect(`/auth/shopify?shop=${encodeURIComponent(cleanShop)}&host=${encodeURIComponent(host || '')}&embedded=${embedded || '1'}`);
+    const authUrl = `/auth/shopify?shop=${encodeURIComponent(cleanShop)}&host=${encodeURIComponent(host || '')}&embedded=${embedded || '1'}`;
+    console.log(`Redirecting to OAuth: ${authUrl}`);
+    ctx.redirect(authUrl);
     return;
   }
   
   // No shop parameter - show installation page
+  console.log('No shop parameter, showing installation page');
   await ctx.render('install', { 
     title: 'Install AI Facebook Ads Pro',
     shop: ''
@@ -212,6 +236,14 @@ router.get('/', async (ctx) => {
 router.get('/install', async (ctx) => {
   const shop = ctx.query.shop;
   const host = ctx.query.host;
+  
+  console.log('Install route accessed with params:', {
+    shop,
+    host,
+    userAgent: ctx.get('User-Agent'),
+    referer: ctx.get('Referer'),
+    allParams: ctx.query
+  });
   
   if (shop) {
     // Redirect to main installation flow
@@ -224,6 +256,36 @@ router.get('/install', async (ctx) => {
     title: 'Install AI Facebook Ads Pro',
     shop: ''
   });
+});
+
+// Debug route to help troubleshoot installation issues
+router.get('/debug', async (ctx) => {
+  const debugInfo = {
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    host: process.env.HOST || 'Not set',
+    shopifyApiKey: process.env.SHOPIFY_API_KEY ? 'Set' : 'Not set',
+    shopifySecret: process.env.SHOPIFY_API_SECRET_KEY ? 'Set' : 'Not set',
+    queryParams: ctx.query,
+    headers: {
+      userAgent: ctx.get('User-Agent'),
+      referer: ctx.get('Referer'),
+      host: ctx.get('Host'),
+      origin: ctx.get('Origin')
+    },
+    url: ctx.url,
+    method: ctx.method
+  };
+  
+  ctx.body = {
+    message: 'AI Facebook Ads Pro - Debug Information',
+    debug: debugInfo,
+    installationUrl: `${process.env.HOST || 'https://your-app-url.com'}/?shop=YOUR_SHOP.myshopify.com`,
+    partnerDashboardConfig: {
+      appUrl: process.env.HOST || 'https://your-app-url.com',
+      callbackUrl: `${process.env.HOST || 'https://your-app-url.com'}/auth/shopify/callback`
+    }
+  };
 });
 
 // Main embedded app route
